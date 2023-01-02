@@ -1,48 +1,14 @@
 require "./libtox"
 require "./utils"
+require "./tox/options"
+require "./tox/self"
 
 class Tox
   @tox : LibTox::Tox
   @handler : Handler
+  @self : Self
 
-  # TODO: use macros
-  class Options
-    @options : LibTox::ToxOptions*
-
-    def local_discovery()
-      LibTox.options_get_local_discovery_enabled(@options) != 0
-    end
-    def local_discovery=(enabled : Bool)
-      LibTox.options_set_local_discovery_enabled(@options, 1)
-    end
-
-    def hole_punching()
-      LibTox.options_get_hole_punching_enabled(@options) != 0
-    end
-    def hole_punching=(enabled : Bool)
-      LibTox.options_set_hole_punching_enabled(@options, 1)
-    end
-
-    def initialize()
-      @options = LibTox.options_new(out err)
-      case err
-      when LibTox::ErrOptionsNew::ErrOptionsNewOk
-        LibTox.options_default(@options)
-      else
-        raise Error.new(err)
-      end
-    end
-
-    def finalize
-      LibTox.options_free(@options)
-    end
-
-    class Error < Exception
-      def initialize(err : LibTox::ErrOptionsNew)
-        super("ErrOptions #{err}")
-      end
-    end
-  end
+  getter :self
 
   def self.version()
     major = LibTox.version_major()
@@ -53,7 +19,7 @@ class Tox
   end
 
   def bootstrap(host, port, key : String)
-    public_key = Utils.hex_string_to_bin(key)
+    public_key = Utils.hex_to_bin(key)
 
     LibTox.bootstrap(@tox, host, port, public_key, out err)
 
@@ -64,8 +30,8 @@ class Tox
     end
   end
 
-  def iterate
-    interval = LibTox.iteration_interval(@tox)
+  def iterate(interval : Int? = nil)
+    interval ||= LibTox.iteration_interval(@tox)
 
     LibTox.iterate(@tox, pointerof(@handler))
 
@@ -84,6 +50,7 @@ class Tox
     @tox = LibTox.new(nil, out err)
     case err
     when LibTox::ErrNew::ErrNewOk
+      @self = Self.new(@tox)
     else
       raise Error.new(err)
     end

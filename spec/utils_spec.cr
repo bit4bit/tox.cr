@@ -1,8 +1,17 @@
 require "./spec_helper"
 
 describe Utils do
+  it "bin_to_hex" do
+    bin = Pointer(UInt8).malloc(3)
+    bin[0] = 3
+    bin[1] = 10
+    bin[2] = 15
+
+    Utils.bin_to_hex(bin, 3).should eq "3af"
+  end
+
   it "hex_string_to_bin" do
-    bin = Utils.hex_string_to_bin("0123456789ABCDEF")
+    bin = Utils.hex_to_bin("0123456789ABCDEF")
 
     bin[0].should eq(0)
     bin[1].should eq(1)
