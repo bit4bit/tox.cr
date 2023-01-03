@@ -40,5 +40,28 @@ describe Tox do
     tox.iterate
   end
 
+  it "connect to DHT", tags: "integration" do
+    events = Channel(Tox::Event).new(10)
 
+    tox = Tox.new(events: events)
+    tox.self.name = "bob"
+    tox.self.status_message = "bob"
+
+    # requerido de lo contrario no conectan
+    tox_peer = Tox.new()
+    spawn do
+      loop do
+        tox_peer.iterate
+
+        tox.iterate
+      end
+    end
+
+    select
+    when event = events.receive
+      event.is_a?(Tox::Event::Connection).should eq(true)
+    when timeout 15.second
+      raise "not event"
+    end
+  end
 end

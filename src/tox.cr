@@ -2,11 +2,12 @@ require "./libtox"
 require "./utils"
 require "./tox/options"
 require "./tox/self"
+require "./tox/event"
 
 class Tox
   @tox : LibTox::Tox
-  @handler : Handler
   @self : Self
+  @box : Pointer(Void)?
 
   getter :self
 
@@ -30,27 +31,80 @@ class Tox
     end
   end
 
-  def iterate(interval : Int? = nil)
-    interval ||= LibTox.iteration_interval(@tox)
+  def start_timer
+    iterator = Channel(Nil).new(1)
+    spawn do
+      loop do
+        iterator.send nil
+        sleep iteration_interval.millisecond
+      end
+    end
 
-    LibTox.iterate(@tox, pointerof(@handler))
-
-    sleep interval.millisecond
+    iterator
   end
 
-  class Handler
+  def iterate()
+    boxed = Box.box(self)
+    LibTox.iterate(@tox, boxed)
+    sleep iteration_interval.millisecond
   end
 
-  class DummyHandler < Handler
+  def add_friend(toxid : String, message : String = "")
+    address = Utils.hex_to_bin(toxid)
+
+    LibTox.friend_add(@tox, address, message, message.size, out err)
+
+    case err
+    when LibTox::ErrFriendAdd::ErrFriendAddOk
+    else
+      raise Error.new(err)
+    end
   end
 
-  def initialize(options : Options? = nil, handler : Handler = DummyHandler.new)
-    @handler = handler
+  def handle_friend_request(public_key, message)
+    return if @events.nil?
+    ch = @events.as(Channel(Tox::Event))
+    ch.send Event::FriendRequest.new(public_key, message)
+  end
 
-    @tox = LibTox.new(nil, out err)
+  def handle_self_connection_status(status)
+    if @events.nil?
+      return
+    else
+      ch = @events.as(Channel(Tox::Event))
+      ev = case status
+           when LibTox::Connection::ConnectionNone
+             Event::Connection.new(:none)
+           when LibTox::Connection::ConnectionTcp
+             Event::Connection.new(:tcp)
+           when LibTox::Connection::ConnectionUdp
+             Event::Connection.new(:udp)
+           else
+             raise "not known how handle connection status #{status}"
+           end
+
+      ch.send ev
+    end
+  end
+
+  def initialize(options : Options? = nil, @events : Channel(Event)? = nil)
+    @tox = LibTox.new(options, out err)
+
     case err
     when LibTox::ErrNew::ErrNewOk
       @self = Self.new(@tox)
+      @box = Box.box(self)
+      LibTox.callback_friend_request(@tox, ->(_tox, public_key, message, message_length, user_data) {
+                                       wtox = Box(Tox).unbox(user_data)
+                                       public_key_hex = Utils.bin_to_hex(public_key, LibTox::PUBLIC_KEY_SIZE)
+                                       message_str = Utils.bin_to_string(message, message_length)
+                                       wtox.handle_friend_request(public_key_hex, message_str)
+                                     })
+
+      LibTox.callback_self_connection_status(@tox, ->(_tox, status, user_data) {
+                                               wtox = Box(Tox).unbox(user_data)
+                                               wtox.handle_self_connection_status(status)
+                                             })
     else
       raise Error.new(err)
     end
@@ -61,8 +115,12 @@ class Tox
   end
 
   class Error < Exception
-    def initialize(@err : LibTox::ErrNew | LibTox::ErrBootstrap)
+    def initialize(@err : LibTox::ErrNew | LibTox::ErrBootstrap | LibTox::ErrFriendAdd)
       super("NewError #{@err}")
     end
+  end
+
+  private def iteration_interval
+    LibTox.iteration_interval(@tox)
   end
 end

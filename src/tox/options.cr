@@ -27,6 +27,10 @@ class Tox
       end
     end
 
+    def to_unsafe
+      @options
+    end
+
     def finalize
       LibTox.options_free(@options)
     end
