@@ -3,6 +3,7 @@ require "./utils"
 require "./tox/options"
 require "./tox/self"
 require "./tox/event"
+require "./tox/event_consumer"
 
 class Tox
   @tox : LibTox::Tox
@@ -49,25 +50,27 @@ class Tox
     sleep iteration_interval.millisecond
   end
 
-  def add_friend(toxid : String, message : String = "")
+  def add_friend(toxid : String, message : String = "") : UInt32
     address = Utils.hex_to_bin(toxid)
 
-    LibTox.friend_add(@tox, address, message, message.size, out err)
+    friend_id = LibTox.friend_add(@tox, address, message, message.size, out err)
 
     case err
     when LibTox::ErrFriendAdd::ErrFriendAddOk
+      friend_id
     else
       raise Error.new(err)
     end
   end
 
-  def add_friend_norequest(public_key : String)
+  def add_friend_norequest(public_key : String) : UInt32
     address = Utils.hex_to_bin(public_key)
 
-    LibTox.friend_add_norequest(@tox, address, out err)
+    friend_id = LibTox.friend_add_norequest(@tox, address, out err)
 
     case err
     when LibTox::ErrFriendAdd::ErrFriendAddOk
+      friend_id
     else
       raise Error.new(err)
     end
