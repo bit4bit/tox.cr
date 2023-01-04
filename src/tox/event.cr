@@ -3,10 +3,7 @@ class Tox
 
     class FriendRequest < Event
       getter :public_key
-
-      def message : String
-        @message
-      end
+      getter :message
 
       def initialize(@public_key : String, @message : String)
       end

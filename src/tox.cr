@@ -61,6 +61,18 @@ class Tox
     end
   end
 
+  def add_friend_norequest(public_key : String)
+    address = Utils.hex_to_bin(public_key)
+
+    LibTox.friend_add_norequest(@tox, address, out err)
+
+    case err
+    when LibTox::ErrFriendAdd::ErrFriendAddOk
+    else
+      raise Error.new(err)
+    end
+  end
+
   def handle_friend_request(public_key, message)
     return if @events.nil?
     ch = @events.as(Channel(Tox::Event))
